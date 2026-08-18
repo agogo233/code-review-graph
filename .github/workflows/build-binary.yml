@@ -52,10 +52,15 @@ jobs:
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             BINARY="dist/code-review-graph.exe"
           else
-            BINARY="dist/code-review-graph/code-review-graph"
+            BINARY="dist/code-review-graph"
+          fi
+          if [ ! -f "${BINARY}" ]; then
+            echo "ERROR: binary not found at ${BINARY}" >&2
+            ls -la dist/ || true
+            exit 1
           fi
           echo "Smoke-testing: ${BINARY}"
-          OUTPUT=$( "${BINARY}" --help 2>&1 ) || true
+          OUTPUT=$( "${BINARY}" --help 2>&1 )
           if [ -z "${OUTPUT}" ]; then
             echo "ERROR: binary produced no output for --help" >&2
             exit 1
@@ -71,7 +76,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: code-review-graph-ubuntu
-          path: dist/code-review-graph/code-review-graph
+          path: dist/code-review-graph
           if-no-files-found: error
           retention-days: 90
 
