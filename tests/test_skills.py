@@ -2093,6 +2093,20 @@ class TestDetectServeCommand:
         monkeypatch.setattr("code_review_graph.skills.Path.home", staticmethod(lambda: tmp_path))
         assert _in_uv_project() is False
 
+    def test_frozen_uses_argv0(self, monkeypatch):
+        """PyInstaller one-file binary (sys.frozen=True) → sys.argv[0] serve."""
+        monkeypatch.setenv("POETRY_ACTIVE", "1")
+        monkeypatch.setenv("UV_PROJECT_ENVIRONMENT", "/some/.venv")
+        monkeypatch.setattr(
+            "code_review_graph.skills.shutil.which",
+            lambda x: "/usr/bin/uvx" if x == "uvx" else None,
+        )
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+        monkeypatch.setattr(sys, "argv", ["/usr/bin/crg"])
+        cmd, args = _detect_serve_command()
+        assert cmd == "/usr/bin/crg"
+        assert args == ["serve"]
+
 
 class TestOpenCodePluginContent:
     """Tests for _opencode_plugin_content()."""

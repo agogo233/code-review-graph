@@ -1,0 +1,103 @@
+name: Build Binaries (wheel + sdist)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: python -m pip install -e ".[dev]" pyinstaller build
+
+      - name: Generate PyInstaller entry script
+        shell: bash
+        run: |
+          cat > entry.py <<'PYENTRY'
+          from code_review_graph.cli import main
+
+          main()
+          PYENTRY
+
+      - name: Build PyInstaller binary
+        run: >-
+          python -m PyInstaller --onefile --noconfirm --clean
+          --name code-review-graph
+          --hidden-import=mcp
+          --collect-submodules=fastmcp
+          --collect-submodules=tree_sitter_language_pack
+          entry.py
+
+      - name: Smoke test binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            BINARY="dist/code-review-graph.exe"
+          else
+            BINARY="dist/code-review-graph/code-review-graph"
+          fi
+          echo "Smoke-testing: ${BINARY}"
+          OUTPUT=$( "${BINARY}" --help 2>&1 ) || true
+          if [ -z "${OUTPUT}" ]; then
+            echo "ERROR: binary produced no output for --help" >&2
+            exit 1
+          fi
+          echo "OK: binary produced $(wc -l <<< "${OUTPUT}") lines of help output"
+
+      - name: Build wheel and sdist
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: python -m build
+
+      - name: Upload binary artifact (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: code-review-graph-ubuntu
+          path: dist/code-review-graph/code-review-graph
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload binary artifact (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: code-review-graph-windows
+          path: dist/code-review-graph.exe
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload wheel artifact
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: code-review-graph-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload sdist artifact
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: code-review-graph-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 90

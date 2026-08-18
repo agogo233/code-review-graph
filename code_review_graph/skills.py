@@ -303,21 +303,32 @@ def _detect_serve_command() -> tuple[str, list[str]]:
 
     Detection priority
     ------------------
-    1. **Poetry** – ``POETRY_ACTIVE=1`` OR ``VIRTUAL_ENV`` contains ``"pypoetry"``
+    1. **PyInstaller frozen** — running inside a PyInstaller one-file binary
+       (``sys.frozen`` set) → ``sys.argv[0] serve``.
+       This is first because ``sys.executable`` inside a frozen binary is the
+       extracted temporary Python, not the standalone binary itself; the
+       frozen check takes precedence over all environment-based detection.
+    2. **Poetry** – ``POETRY_ACTIVE=1`` OR ``VIRTUAL_ENV`` contains ``"pypoetry"``
        (covers both ``poetry shell`` and ``poetry run``) and ``poetry`` is on PATH
        → ``poetry run code-review-graph serve``
-    2. **uv project** – ``UV_PROJECT_ENVIRONMENT`` is set, or a ``uv.lock``
+    3. **uv project** – ``UV_PROJECT_ENVIRONMENT`` is set, or a ``uv.lock``
        ancestor is found alongside ``sys.executable``, and ``uv`` is on PATH
        → ``uv run code-review-graph serve``
-    3. **uvx** – ``uvx`` is available on PATH (existing behaviour, unchanged)
+    4. **uvx** – ``uvx`` is available on PATH (existing behaviour, unchanged)
        → ``uvx code-review-graph serve``
-    4. **Fallback** – use the absolute path of the running Python interpreter
+    5. **Fallback** – use the absolute path of the running Python interpreter
        → ``sys.executable -m code_review_graph serve``
 
     The fallback is always safe: ``sys.executable`` is the exact interpreter
     that is currently running, so it resolves correctly inside any virtual
     environment, conda env, or system installation.
     """
+    if getattr(sys, "frozen", False):
+        # Running inside a PyInstaller one-file binary. sys.argv[0] is the
+        # executable name/path; opencode resolves it via PATH just like the
+        # uvx fallback branch. No need for an absolute path here.
+        return (sys.argv[0], ["serve"])
+
     # 1. Poetry (poetry shell or poetry run)
     if _in_poetry_project():
         poetry = shutil.which("poetry")
